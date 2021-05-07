@@ -6,8 +6,34 @@
 #include<iostream>
 #include<vector>
 #include<math.h>
-#define SIZE 40
+#define SIZE 50
 #define gotoxy(x,y) printf("\033[%d;%dH", (y), (x))
+
+void adjustWindowSize(int w, int h)
+{
+	HWND wh = GetConsoleWindow();
+ 
+    // Move window to required position
+    MoveWindow(wh, 100, 100, w, h, TRUE);
+//    SMALL_RECT test; 
+//
+//    HANDLE hStdout;
+//    COORD coord;
+//    BOOL ok;
+//
+//    hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+//    coord.X = 2200;
+//    coord.Y = 2200;
+//    ok = SetConsoleScreenBufferSize(hStdout, coord);
+//
+//    test.Left = 0;
+//    test.Top = 0;
+//    test.Right = coord.X-1;
+//    test.Bottom = coord.Y-1;
+//
+//    SetConsoleWindowInfo(hStdout, ok, &test);
+
+} //end adjustWindowSize 
 using namespace std;
 void clear(){
 	system("cls");
@@ -76,6 +102,7 @@ class Projectile: public Mortal{
 		this->direction=direction;
 		this->symbol=symbol;
 		this->damage=damage;
+		this->entityObstacle=false;
 	}
 	
 	bool move(){ 
@@ -99,11 +126,13 @@ class Projectile: public Mortal{
 		
 		if(map[position->y][position->x].mortal){
 			map[position->y][position->x].mortal->hp=map[position->y][position->x].mortal->hp-damage;
-			printf("%c",map[position->y][position->x].mortal->symbol);
-			map[position->y][position->x].mortal->symbol='2';
+			if(map[position->y][position->x].mortal->hp<=0){
+				map[position->y][position->x].mortal=NULL;
+				map[position->y][position->x].symbol=' ';
+			}
 			return false;
 		}
-		else if(position->x>=1&&position->y>=1&&position->x<SIZE-1&&position->y<SIZE-1&&map[position->y][position->x].symbol!='#'){
+		else if(position->x>=1&&position->y>=1&&position->x<SIZE-1&&position->y<SIZE-1&&map[position->y][position->x].symbol!='#'&&this->hp>0){
 			map[position->y][position->x].symbol=this->symbol;
 			map[position->y][position->x].mortal=this;
 					
@@ -124,7 +153,7 @@ class Missile: public Mortal{
 	public:
 	Position *direction;
 	char animationSymbol;
-	
+	int damage;
 	// Creating a shortcut for int, int pair type
 	typedef pair<int, int> Pair;
 	 
@@ -136,7 +165,7 @@ class Missile: public Mortal{
 		this->position=position;
 		this->direction=direction;
 		this->symbol=symbol;
-		
+		this->damage=1;
 	}
 	
 	bool move(){
@@ -149,7 +178,22 @@ class Missile: public Mortal{
 		int dir2=(rand()%2==0?-1:1);
 		
 		
-		if(position->x>=1&&position->y>=1&&position->x<SIZE-1&&position->y<SIZE-1){
+		while(map[this->position->y][this->position->x].mortal!=NULL&&map[this->position->y][this->position->x].mortal->symbol=='o'){
+			
+			this->position->y=this->position->y+(rand()%2*this->direction->x*dir);
+			
+			this->position->x=this->position->x+(rand()%2*this->direction->y*dir2);
+//			keypress();
+			
+		}
+
+
+		if(map[position->y][position->x].mortal){
+			map[position->y][position->x].mortal->hp=map[position->y][position->x].mortal->hp-damage;
+			return false;
+		}
+		
+		else if(position->x>=1&&position->y>=1&&position->x<SIZE-1&&position->y<SIZE-1&&this->hp>0){
 			map[position->y][position->x].symbol=this->symbol;
 			map[position->y][position->x].mortal=this;
 			return true;
@@ -158,7 +202,7 @@ class Missile: public Mortal{
 };
 class Enemy: public Mortal{
 	public:
-	std::vector<Missile> missiles;	
+	std::vector<Missile*> missiles;	
 	Position *direction;
 	
 	Enemy(int hp, struct Position *position, struct Position *direction,char symbol){
@@ -172,24 +216,40 @@ class Enemy: public Mortal{
 		
 	}	
 	bool isAlive(){
-		return Mortal::hp>=0;
+		return hp>0;
 	}
 	void shoot(){
-		Missile *shootedMissile=new Missile(newPosition(position->y,position->x),newPosition(direction->y,direction->x),'*',1);
-		missiles.push_back(*shootedMissile);
-		if(!shootedMissile->move()){   
-			missiles.pop_back();
-		}
+		Missile *shootedMissile=new Missile(newPosition(position->y+direction->y,position->x+direction->x),newPosition(direction->y,direction->x),'o',1);
+		missiles.push_back(shootedMissile);
+
 	}	
+	void validateMissiles(){
+		for(int i=0;i<missiles.size();i++){
+			Missile *tempe=missiles[i];
+			if(!tempe->move()){   
+				
+				missiles.erase(missiles.begin()+i);
+				i--;
+			}
+			else{
+				if(!tempe->move()){   
+					missiles.erase(missiles.begin()+i);
+					i--;
+				}
+			}
+		}
+	}
+
 	void terminated(){
 		map[position->y][position->x].symbol=' ';
 		map[position->y][position->x].mortal=NULL;
+
 		
 	}
 };
 class Player: public Mortal{
 	public:
-	std::vector<Projectile> projectiles;	
+	std::vector<Projectile*> projectiles;	
 	Position *direction;
 	
 	Player(int hp, struct Position *position, struct Position *direction,char symbol){
@@ -207,9 +267,12 @@ class Player: public Mortal{
 			return;
 		}
 		map[this->position->y][this->position->x].symbol=' ';
+		map[this->position->y][this->position->x].mortal=NULL;
+		
 		this->position->y+=y;
 		this->position->x+=x;
 		map[this->position->y][this->position->x].symbol=symbol;
+		map[this->position->y][this->position->x].mortal=this;
 		
 	}
 	void face(int y, int x, char symbol){
@@ -221,7 +284,7 @@ class Player: public Mortal{
 	}
 	void shoot(){
 		Projectile *shootedProjectile=new Projectile(newPosition(position->y,position->x),newPosition(direction->y,direction->x),'*',1);
-		projectiles.push_back(*shootedProjectile);
+		projectiles.push_back(shootedProjectile);
 		
 //		if(map[shootedProjectile->position->y][shootedProjectile->position->x].mortal!=NULL&&map[shootedProjectile->position->y][shootedProjectile->position->x].mortal->symbol=='*'){
 //			shootedProjectile->position->y=shootedProjectile->position->y+rand()%1;
@@ -230,29 +293,28 @@ class Player: public Mortal{
 //			
 //		}
 
-//		if(!shootedProjectile->move()){   
-//			projectiles.pop_back();
-//		}
+		if(!shootedProjectile->move()){   
+			projectiles.pop_back();
+		}
 		
 	}
 	void blinkProjectiles(bool blink){
 		for(int i=0;i<projectiles.size();i++){
-			Projectile tempe=projectiles[i];
-			if(blink)map[tempe.position->y][tempe.position->x].symbol=tempe.symbol;
-			else map[tempe.position->y][tempe.position->x].symbol=tempe.animationSymbol;
+			Projectile *tempe=projectiles[i];
+			if(blink)map[tempe->position->y][tempe->position->x].symbol=tempe->symbol;
+			else map[tempe->position->y][tempe->position->x].symbol=tempe->animationSymbol;
 			
 		}
 	}
 	void validateProjectiles(){
 		for(int i=0;i<projectiles.size();i++){
-			Projectile tempe=projectiles[i];
-			if(!tempe.move()){   
+			Projectile *tempe=projectiles[i];
+			if(!tempe->move()){   
 				projectiles.erase(projectiles.begin()+i);
 				i--;
-				
-				
-			}else{
-				if(!tempe.move()){   
+			}
+			else{
+				if(!tempe->move()){   
 					projectiles.erase(projectiles.begin()+i);
 					i--;
 				}
@@ -280,19 +342,14 @@ int waitKeyPress(int x){
 		return -1;
 }
 
-int realTimePress(int x){
-	int milsec = 10 *x;
-		clock_t startTime = clock();
-		
+int realTimePress(){
 		int ch=-1;
-		
-		while(clock() < (startTime + milsec)){
+
 			int hit = kbhit();
 			if (hit){	
 				ch = getch();
 				
 			}	
-		}
 		return ch;
 }
 
@@ -314,6 +371,7 @@ void printMap(Player *currPlayer){
 		printf("\n");
 		
 	}
+	printf("hp: %d",currPlayer->hp);
 }
 
 
@@ -328,11 +386,10 @@ void printMap(Player *currPlayer){
 
 void playerController(Player *currPlayer,bool blink){
 	if(blink)currPlayer->shoot();
-	if(blink)currPlayer->shoot();
-	if(blink)currPlayer->shoot();
 	
 	currPlayer->validateProjectiles();
-	int key=realTimePress(1);
+	int key=-1;
+	key=realTimePress();
 	switch(key){
 		case 'w':
 			currPlayer->move(-1,0);
@@ -385,56 +442,59 @@ void playerController(Player *currPlayer,bool blink){
 		default:
 			currPlayer->move(0,0);
 	}
+	
 }
 
 
 
 
 
-vector <Enemy> *initEnemy(){
-	vector<Enemy> *enemyList=new vector<Enemy>();
+vector <Enemy*> *initEnemy(){
+	vector<Enemy*> *enemyList=new vector<Enemy*>();
 	
-	enemyList->push_back(*new Enemy(10,newPosition(4,4), newPosition(1,0),'O'));
+	enemyList->push_back(new Enemy(10,newPosition(4,4), newPosition(1,0),'E'));
 
-	enemyList->push_back(*new Enemy(10,newPosition(4,SIZE-5), newPosition(1,0),'E'));
+	enemyList->push_back(new Enemy(10,newPosition(4,SIZE-5), newPosition(1,0),'E'));
 
-	enemyList->push_back(*new Enemy(10,newPosition(SIZE-5,4), newPosition(1,0),'E'));
+	enemyList->push_back(new Enemy(10,newPosition(SIZE-5,4), newPosition(1,0),'E'));
 
-	enemyList->push_back(*new Enemy(10,newPosition(SIZE-5,SIZE-5), newPosition(1,0),'E'));
+	enemyList->push_back(new Enemy(10,newPosition(SIZE-5,SIZE-5), newPosition(1,0),'E'));
 	
 	return enemyList;
 }
-void enemyController(vector <Enemy> enemyList){
-	for(int i=0;i<enemyList.size();i++){
-		Enemy tempEnemy=enemyList[i];
+void enemyController(vector <Enemy*> *enemyList, bool blink){
+	for(int i=0;i<enemyList->size();i++){
+		Enemy *tempEnemy=enemyList->at(i);
 		
-		if(!tempEnemy.isAlive()){   
+		tempEnemy->validateMissiles();
+		if(rand()%4==0&&blink)tempEnemy->shoot();
+		if(!tempEnemy->isAlive()){   
 			
-			
-			tempEnemy.terminated();
-			enemyList.erase(enemyList.begin()+i);
+			tempEnemy->terminated();
+			enemyList->erase(enemyList->begin()+i);
 			i--;
 
 
 		}else{
-			map[tempEnemy.position->y][tempEnemy.position->x].symbol=tempEnemy.symbol;
-			printf("%c",tempEnemy.symbol);
+			map[tempEnemy->position->y][tempEnemy->position->x].symbol=tempEnemy->symbol;
+			printf("%c",tempEnemy->symbol);
 		}
 	}
 }
 void playGame(){
+	adjustWindowSize(1000,1000);
 	clear();
 	
 	initMap();
 	int gameStatus=0;
 	bool blink=true;
 	Player *currPlayer=new Player(3, newPosition(9,14),newPosition(-1,0),'^');
-	vector<Enemy> *enemyList= initEnemy();
+	vector<Enemy*> *enemyList= initEnemy();
 	while(gameStatus==0){
 		printMap(currPlayer);
-		enemyController(*enemyList);
+		enemyController(enemyList,blink);
 		playerController(currPlayer,blink);		
-//		blink=!blink;
+		blink=!blink;
 	}	
 }
 
@@ -552,6 +612,7 @@ void printMenu(bool blink, int menu){
 
 
 int menuInputController(int *menu){
+	
 	char input=waitKeyPress(8);
 	switch(input){
 		case 'w':
@@ -605,6 +666,7 @@ void menu(){
 
 int main(){
 	srand(time(NULL));
+	adjustWindowSize(1000,600);
 	intro();	
 	menu();
 }
