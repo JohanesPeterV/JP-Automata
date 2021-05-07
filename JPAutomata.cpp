@@ -5,9 +5,13 @@
 #include<conio.h>
 #include<iostream>
 #include<vector>
-#define SIZE 20           
-
-
+#include<math.h>
+#define SIZE 40
+#define gotoxy(x,y) printf("\033[%d;%dH", (y), (x))
+using namespace std;
+void clear(){
+	system("cls");
+}
 struct Position{
 	int y;
 	int x;
@@ -24,31 +28,220 @@ class Mortal{
 		int hp;
 		char symbol;
 		Position *position;
+		bool entityObstacle;
+		bool projectileObstacle;
+};
+
+struct Tile{
+	char symbol;
+	Mortal *mortal;
+};
+struct Tile map[SIZE][SIZE]={0};
+void initMap(){
+	for(int i=0;i<SIZE;i++){
+		for(int t=0;t<SIZE;t++){
+			map[i][t].symbol=' ';
+			map[i][t].mortal=NULL;
+//			
+		}
+	}
+	for(int i=0;i<SIZE;i++){
+		map[i][0].symbol='#';
+		map[i][SIZE-1].symbol='#';
+		map[0][i].symbol='#';
+		map[SIZE-1][i].symbol='#';
 		
+	}
+}
+int keypress(){
+	int benar=0;
+	while(benar==0){
+		int hit = kbhit();
+		int ch;
+		if (hit){	
+			ch = getch();
+			benar=1;
+			return ch;
+		}	
+	}
+}
+class Projectile: public Mortal{
+	public:
+	Position *direction;
+	char animationSymbol;
+	int damage;
+	Projectile(Position *position, Position *direction,char symbol, int damage){
+		this->hp=1;
+		this->position=position;
+		this->direction=direction;
+		this->symbol=symbol;
+		this->damage=damage;
+	}
+	
+	bool move(){ 
+		map[position->y][position->x].symbol=' ';
+		map[position->y][position->x].mortal=NULL;
+		
+		position->x=position->x+direction->x;
+		position->y=position->y+direction->y;
+		int dir=(rand()%2==0?-1:1);
+		int dir2=(rand()%2==0?-1:1);
+		
+		while(map[this->position->y][this->position->x].mortal!=NULL&&map[this->position->y][this->position->x].mortal->symbol=='*'){
+			
+			this->position->y=this->position->y+(rand()%2*this->direction->x*dir);
+			
+			this->position->x=this->position->x+(rand()%2*this->direction->y*dir2);
+//			keypress();
+			
+		}
+
+		
+		if(map[position->y][position->x].mortal){
+			map[position->y][position->x].mortal->hp=map[position->y][position->x].mortal->hp-damage;
+			printf("%c",map[position->y][position->x].mortal->symbol);
+			map[position->y][position->x].mortal->symbol='2';
+			return false;
+		}
+		else if(position->x>=1&&position->y>=1&&position->x<SIZE-1&&position->y<SIZE-1&&map[position->y][position->x].symbol!='#'){
+			map[position->y][position->x].symbol=this->symbol;
+			map[position->y][position->x].mortal=this;
+					
+			return true;	
+		}
+
+		return false;
+	}
+	bool validate(){ 
+		
+		
+		return position->x>=1&&position->y>=1&&position->x<SIZE-1&&position->y<SIZE-1&&map[position->y][position->x].symbol!='#';
+	}
 };
 
 
-
-class Projectile {
+class Missile: public Mortal{
 	public:
-	Position *position;
 	Position *direction;
-	Projectile(Position *position, Position *direction){
+	char animationSymbol;
+	
+	// Creating a shortcut for int, int pair type
+	typedef pair<int, int> Pair;
+	 
+	// Creating a shortcut for pair<int, pair<int, int>> type
+	typedef pair<double, pair<int, int> > pPair;
+	
+	Missile(Position *position, Position *direction,char symbol, int hp){
+		this->hp=1;
+		this->position=position;
+		this->direction=direction;
+		this->symbol=symbol;
 		
 	}
 	
 	bool move(){
+		map[position->y][position->x].symbol=' ';
+		map[position->y][position->x].mortal=NULL;
+		
 		position->x=position->x+direction->x;
 		position->y=position->y+direction->y;
-		return position->x>=0&&position->y>=0&&position->x<SIZE&&position->y<SIZE;
+		int dir=(rand()%2==0?-1:1);
+		int dir2=(rand()%2==0?-1:1);
+		
+		
+		if(position->x>=1&&position->y>=1&&position->x<SIZE-1&&position->y<SIZE-1){
+			map[position->y][position->x].symbol=this->symbol;
+			map[position->y][position->x].mortal=this;
+			return true;
+		}
+	}	
+};
+class Enemy: public Mortal{
+	public:
+	std::vector<Missile> missiles;	
+	Position *direction;
+	
+	Enemy(int hp, struct Position *position, struct Position *direction,char symbol){
+		this->position=position;
+		this->direction=direction;
+		this->hp=hp;
+		this->symbol=symbol;
+		this->entityObstacle=true;
+		map[this->position->y][this->position->x].symbol=symbol;
+		map[this->position->y][this->position->x].mortal=this;
+		
+	}	
+	bool isAlive(){
+		return Mortal::hp>=0;
+	}
+	void shoot(){
+		Missile *shootedMissile=new Missile(newPosition(position->y,position->x),newPosition(direction->y,direction->x),'*',1);
+		missiles.push_back(*shootedMissile);
+		if(!shootedMissile->move()){   
+			missiles.pop_back();
+		}
+	}	
+	void terminated(){
+		map[position->y][position->x].symbol=' ';
+		map[position->y][position->x].mortal=NULL;
+		
 	}
 };
-
 class Player: public Mortal{
+	public:
 	std::vector<Projectile> projectiles;	
-	Player(int hp, int y, int x){
-		this->position=newPosition(y,x);
+	Position *direction;
+	
+	Player(int hp, struct Position *position, struct Position *direction,char symbol){
+		this->position=position;
+		this->direction=direction;
 		this->hp=hp;
+		this->symbol=symbol;
+		map[this->position->y][this->position->x].symbol=symbol;
+		map[this->position->y][this->position->x].mortal=this;
+		
+	}
+	void move(int y, int x){
+		if(map[this->position->y+y][this->position->x+x].symbol=='#'||(map[this->position->y+y][this->position->x+x].mortal&&map[this->position->y+y][this->position->x+x].mortal->entityObstacle)){
+			map[this->position->y][this->position->x].symbol=this->symbol;
+			return;
+		}
+		map[this->position->y][this->position->x].symbol=' ';
+		this->position->y+=y;
+		this->position->x+=x;
+		map[this->position->y][this->position->x].symbol=symbol;
+		
+	}
+	void face(int y, int x, char symbol){
+		this->direction->y=y;
+		this->direction->x=x;		
+		this->symbol=symbol;
+		map[this->position->y][this->position->x].symbol=symbol;
+		
+	}
+	void shoot(){
+		Projectile *shootedProjectile=new Projectile(newPosition(position->y,position->x),newPosition(direction->y,direction->x),'*',1);
+		projectiles.push_back(*shootedProjectile);
+		
+//		if(map[shootedProjectile->position->y][shootedProjectile->position->x].mortal!=NULL&&map[shootedProjectile->position->y][shootedProjectile->position->x].mortal->symbol=='*'){
+//			shootedProjectile->position->y=shootedProjectile->position->y+rand()%1;
+//			shootedProjectile->position->x=shootedProjectile->position->x+rand()%1;
+//			keypress();
+//			
+//		}
+
+//		if(!shootedProjectile->move()){   
+//			projectiles.pop_back();
+//		}
+		
+	}
+	void blinkProjectiles(bool blink){
+		for(int i=0;i<projectiles.size();i++){
+			Projectile tempe=projectiles[i];
+			if(blink)map[tempe.position->y][tempe.position->x].symbol=tempe.symbol;
+			else map[tempe.position->y][tempe.position->x].symbol=tempe.animationSymbol;
+			
+		}
 	}
 	void validateProjectiles(){
 		for(int i=0;i<projectiles.size();i++){
@@ -57,25 +250,22 @@ class Player: public Mortal{
 				projectiles.erase(projectiles.begin()+i);
 				i--;
 				
+				
+			}else{
+				if(!tempe.move()){   
+					projectiles.erase(projectiles.begin()+i);
+					i--;
+				}
 			}
 		}
 	}
-};
-
-struct Tile{
-	char symbol;
-	Mortal mortal;
+	
 };
 
 
 
-Tile map[SIZE][SIZE]={0};
 
 
-
-void clear(){
-	system("CLS");
-}
 int waitKeyPress(int x){
 	int milsec = 100 *x;
 		clock_t startTime = clock();
@@ -90,6 +280,21 @@ int waitKeyPress(int x){
 		return -1;
 }
 
+int realTimePress(int x){
+	int milsec = 10 *x;
+		clock_t startTime = clock();
+		
+		int ch=-1;
+		
+		while(clock() < (startTime + milsec)){
+			int hit = kbhit();
+			if (hit){	
+				ch = getch();
+				
+			}	
+		}
+		return ch;
+}
 
 
 
@@ -98,24 +303,140 @@ int waitKeyPress(int x){
 
 
 
-
-void printMap(){
+void printMap(Player *currPlayer){
+	HANDLE hConsole=GetStdHandle(STD_OUTPUT_HANDLE);
+	COORD pos = {0,0};
+	SetConsoleCursorPosition(hConsole,pos); 
 	for(int i=0;i<SIZE;i++){
 		for(int t=0;t<SIZE;t++){
+			printf("%c ",map[i][t].symbol);
+		}
+		printf("\n");
 		
-		}	
 	}
 }
 
-void playGame(){
-	int gameStatus=0;
-	while(gameStatus==0){
-		
-	}	
+
+
+
+
+
+
+
+
+
+
+void playerController(Player *currPlayer,bool blink){
+	if(blink)currPlayer->shoot();
+	if(blink)currPlayer->shoot();
+	if(blink)currPlayer->shoot();
+	
+	currPlayer->validateProjectiles();
+	int key=realTimePress(1);
+	switch(key){
+		case 'w':
+			currPlayer->move(-1,0);
+			break;
+		case 'W':
+			currPlayer->move(-1,0);
+			break;
+		case 'a':
+			currPlayer->move(0,-1);
+			break;
+		case 'A':
+			currPlayer->move(0,-1);
+			break;
+		case 's':
+			currPlayer->move(1,0);
+			break;
+		case 'S':
+			currPlayer->move(1,0);
+			break;
+		case 'd':
+			currPlayer->move(0,1);
+			break;
+		case 'D':
+			currPlayer->move(0,1);
+			break;
+		case 'i':
+			currPlayer->face(-1,0,'^');
+			break;
+		case 'I':
+			currPlayer->face(-1,0,'^');
+			break;
+		case 'j':
+			currPlayer->face(0,-1,'<');
+			break;
+		case 'J':
+			currPlayer->face(0,-1,'<');
+			break;
+		case 'k':
+			currPlayer->face(1,0,'v');
+			break;
+		case 'K':
+			currPlayer->face(1,0,'v');
+			break;
+		case 'l':
+			currPlayer->face(0,1,'>');
+			break;
+		case 'L':
+			currPlayer->face(0,1,'>');
+			break;
+		default:
+			currPlayer->move(0,0);
+	}
 }
 
 
 
+
+
+vector <Enemy> *initEnemy(){
+	vector<Enemy> *enemyList=new vector<Enemy>();
+	
+	enemyList->push_back(*new Enemy(10,newPosition(4,4), newPosition(1,0),'O'));
+
+	enemyList->push_back(*new Enemy(10,newPosition(4,SIZE-5), newPosition(1,0),'E'));
+
+	enemyList->push_back(*new Enemy(10,newPosition(SIZE-5,4), newPosition(1,0),'E'));
+
+	enemyList->push_back(*new Enemy(10,newPosition(SIZE-5,SIZE-5), newPosition(1,0),'E'));
+	
+	return enemyList;
+}
+void enemyController(vector <Enemy> enemyList){
+	for(int i=0;i<enemyList.size();i++){
+		Enemy tempEnemy=enemyList[i];
+		
+		if(!tempEnemy.isAlive()){   
+			
+			
+			tempEnemy.terminated();
+			enemyList.erase(enemyList.begin()+i);
+			i--;
+
+
+		}else{
+			map[tempEnemy.position->y][tempEnemy.position->x].symbol=tempEnemy.symbol;
+			printf("%c",tempEnemy.symbol);
+		}
+	}
+}
+void playGame(){
+	clear();
+	
+	initMap();
+	int gameStatus=0;
+	bool blink=true;
+	Player *currPlayer=new Player(3, newPosition(9,14),newPosition(-1,0),'^');
+	vector<Enemy> *enemyList= initEnemy();
+	while(gameStatus==0){
+		printMap(currPlayer);
+		enemyController(*enemyList);
+		playerController(currPlayer,blink);		
+//		blink=!blink;
+	}	
+}
 
 void printIntro(bool blink){
 	clear();
@@ -167,15 +488,6 @@ void intro(){
 		input=waitKeyPress(8);
 	}
 }
-
-
-
-
-
-
-
-
-
 
 
 void printMenu(bool blink, int menu){
@@ -274,6 +586,7 @@ void menu(){
 		choice=menuInputController(&menu);
 		switch(choice){
 			case 1:
+				playGame();
 				break;
 				
 			case 2:
@@ -291,6 +604,8 @@ void menu(){
 
 
 int main(){
+	srand(time(NULL));
 	intro();	
 	menu();
 }
+
